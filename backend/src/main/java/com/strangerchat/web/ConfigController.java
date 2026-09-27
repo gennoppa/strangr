@@ -1,5 +1,7 @@
 package com.strangerchat.web;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,20 +17,25 @@ import com.strangerchat.config.AppProperties;
 public class ConfigController {
 
     private final AppProperties props;
+    private final MeteredTurnClient metered;
 
-    public ConfigController(AppProperties props) {
+    public ConfigController(AppProperties props, MeteredTurnClient metered) {
         this.props = props;
+        this.metered = metered;
     }
 
     @GetMapping("/config")
     public Map<String, Object> config() {
-        List<Map<String, Object>> ice = props.iceServers().stream().map(s -> {
-            Map<String, Object> m = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> ice = new ArrayList<>();
+        for (AppProperties.IceServer s : props.iceServers()) {
+            Map<String, Object> m = new LinkedHashMap<>();
             m.put("urls", s.urls());
             if (s.username() != null) m.put("username", s.username());
             if (s.credential() != null) m.put("credential", s.credential());
-            return m;
-        }).toList();
+            ice.add(m);
+        }
+        // TURN relay (if configured) so video works across strict networks / mobile data.
+        ice.addAll(metered.iceServers());
         return Map.of("iceServers", ice);
     }
 }

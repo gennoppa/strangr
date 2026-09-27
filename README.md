@@ -81,19 +81,19 @@ Free-plan notes: the service sleeps after 15 min without traffic and takes ~1 mi
 750 free hours/month is enough for one service running all month. Everything is in memory, so a restart or
 sleep clears the queue and bans.
 
-### Free TURN (makes video work on mobile data / strict networks)
+### Free TURN (makes video work across different networks / mobile data)
 
-1. Create a free account at [metered.ca](https://www.metered.ca/tools/openrelay/) (20 GB/month relay traffic).
-2. In its dashboard, create TURN credentials and copy the server URLs, username and password.
-3. In Render → your service → **Environment**, add `SPRING_APPLICATION_JSON`:
+Without a relay, video fails between many networks ("Video couldn't connect on this network").
 
-```json
-{"app":{"ice-servers":[
-  {"urls":["stun:stun.l.google.com:19302"]},
-  {"urls":["turn:YOUR_HOST:80","turn:YOUR_HOST:443","turns:YOUR_HOST:443?transport=tcp"],
-   "username":"YOUR_USERNAME","credential":"YOUR_PASSWORD"}
-]}}
-```
+1. Sign up free at [metered.ca](https://www.metered.ca/tools/openrelay/) (20 GB/month of relay traffic).
+2. Your app name is the `xxx` in `xxx.metered.live`. In the dashboard open **TURN Server → Credentials / API key**
+   and copy the API key.
+3. In Render → your service → **Environment**, add:
+   - `METERED_APP` = `xxx`
+   - `METERED_API_KEY` = your API key
+4. Save (Render redeploys). The logs should show `Metered TURN enabled for app 'xxx'`.
+
+The key stays on the server; `/api/config` hands browsers the relay credentials (cached 30 min).
 
 ### Custom domain
 
