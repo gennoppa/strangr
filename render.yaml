@@ -10,7 +10,7 @@ services:
     envVars:
       # Browsers may only open the WebSocket from these origins (wildcards allowed).
       - key: APP_ALLOWED_ORIGINS
-        value: https://*.onrender.com,http://localhost:5173
+        value: https://*.onrender.com,https://hellostrangr.com,https://www.hellostrangr.com,http://localhost:5173
       # Render's proxy sets X-Forwarded-For, so bans use the real client IP.
       - key: APP_TRUST_PROXY_HEADERS
         value: "true"

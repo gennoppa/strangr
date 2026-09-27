@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Landing from './components/Landing.jsx';
 import ChatRoom from './components/ChatRoom.jsx';
 import { useStrangerChat } from './hooks/useStrangerChat.js';
+import { PrivacyPage, TermsPage } from './components/LegalPages.jsx';
 
 function Background() {
   return (
@@ -26,6 +27,20 @@ function Screen({ emoji, title, children }) {
 }
 
 export default function App() {
+  // Simple routing for the static legal pages (no router library needed).
+  const path = window.location.pathname.replace(/\/+$/, '');
+  if (path === '/terms' || path === '/privacy') {
+    return (
+      <>
+        <Background />
+        {path === '/terms' ? <TermsPage /> : <PrivacyPage />}
+      </>
+    );
+  }
+  return <ChatApp />;
+}
+
+function ChatApp() {
   const chat = useStrangerChat();
   const [video, setVideo] = useState(true);
   const [interests, setInterests] = useState([]);

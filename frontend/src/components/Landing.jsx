@@ -80,7 +80,10 @@ export default function Landing({ onStart, initialInterests = [], initialMood = 
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
           <span className="check" aria-hidden>{agreed ? '✓' : ''}</span>
           <span>
-            I'm <b>18+</b> and I'll keep it kind 💜 No nudity, hate, bullying or spam — rule-breakers get banned.
+            I'm <b>18+</b>, I'll keep it kind 💜 and I agree to the{' '}
+            <a href="/terms" target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>Terms</a> &{' '}
+            <a href="/privacy" target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
+            No nudity, hate, bullying or spam — rule-breakers get banned.
           </span>
         </label>
 
@@ -95,6 +98,9 @@ export default function Landing({ onStart, initialInterests = [], initialMood = 
         {!agreed && <p className="nudge">Tick the box above to unlock the fun 🔓</p>}
 
         <p className="fineprint">🔒 Chats are peer-to-peer and never recorded. Don't share personal info with strangers.</p>
+        <p className="fineprint links">
+          <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+        </p>
       </div>
     </main>
   );
