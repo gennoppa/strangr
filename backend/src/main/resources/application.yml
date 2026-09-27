@@ -1,0 +1,41 @@
+server:
+  # Render (and most PaaS) inject PORT; default to 8080 locally
+  port: ${PORT:8080}
+  # Honour X-Forwarded-* from nginx when deployed behind it (see docker-compose)
+  forward-headers-strategy: native
+
+spring:
+  application:
+    name: strangerchat
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  # Origins allowed to open the WebSocket. Add your production domain here.
+  allowed-origins:
+    - http://localhost:5173
+    - http://localhost:8080
+    - http://localhost:3000
+  # Set true ONLY when running behind your own reverse proxy (nginx) so X-Forwarded-For is trusted.
+  trust-proxy-headers: false
+
+  matching:
+    # Users with interests wait this long for a shared-interest match before being paired randomly.
+    interest-wait: 8s
+
+  moderation:
+    report-threshold: 3   # distinct reporter IPs needed to ban
+    report-window: 1h
+    ban-duration: 24h
+
+  # Passed to the browser's RTCPeerConnection. STUN is enough on most home networks;
+  # add a TURN server (e.g. coturn) for users behind strict/symmetric NATs.
+  ice-servers:
+    - urls: [ "stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302" ]
+    # - urls: [ "turn:turn.example.com:3478" ]
+    #   username: myuser
+    #   credential: mypassword

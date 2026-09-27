@@ -1,0 +1,17 @@
+# Render Blueprint — one free web service serving the app + WebSocket on a single URL.
+# Render dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: strangr
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      # Browsers may only open the WebSocket from these origins (wildcards allowed).
+      - key: APP_ALLOWED_ORIGINS
+        value: https://*.onrender.com,http://localhost:5173
+      # Render's proxy sets X-Forwarded-For, so bans use the real client IP.
+      - key: APP_TRUST_PROXY_HEADERS
+        value: "true"
+      # Optional TURN server: add SPRING_APPLICATION_JSON in the Render dashboard (see README → "Free TURN").
