@@ -3,7 +3,7 @@ import VideoTile from './VideoTile.jsx';
 import ChatPanel from './ChatPanel.jsx';
 import ReportDialog from './ReportDialog.jsx';
 import { Confetti, Connecting, Ended, Searching } from './Stage.jsx';
-import { interestEmoji } from '../copy.js';
+import { interestEmoji, moodInfo } from '../copy.js';
 
 const Icon = {
   mic: (on) => (
@@ -34,7 +34,7 @@ export default function ChatRoom({ chat, video }) {
   const [matchCount, setMatchCount] = useState(0);
   const prevStatus = useRef(null);
   const {
-    status, messages, strangerTyping, commonInterests, localStream, remoteStream,
+    status, messages, strangerTyping, commonInterests, myMood, partnerMood, localStream, remoteStream,
     micOn, camOn, connectionIssue, next, sendChat, setTyping, report, block, toggleMic, toggleCam,
   } = chat;
 
@@ -60,7 +60,7 @@ export default function ChatRoom({ chat, video }) {
   const s = STATUS[status] || { label: status, emoji: '•' };
 
   const stage =
-    status === 'waiting' || status === 'connecting' ? <Searching compact={!showVideo} />
+    status === 'waiting' || status === 'connecting' ? <Searching compact={!showVideo} mood={myMood} />
     : status === 'ended' ? <Ended message={lastSystem} onNew={next} compact={!showVideo} />
     : null;
 
@@ -74,6 +74,11 @@ export default function ChatRoom({ chat, video }) {
         <div className={`status-pill ${status}`}>
           <span className="pill-dot" />
           <span className="status-label">{s.label}</span>
+          {status === 'chatting' && partnerMood && partnerMood !== 'any' && (
+            <span className={`mood-pill mood-${partnerMood}`} title={`Stranger ${moodInfo(partnerMood).partner}`}>
+              {moodInfo(partnerMood).emoji} <span className="mood-pill-text">{moodInfo(partnerMood).label}</span>
+            </span>
+          )}
           {status === 'chatting' && commonInterests.length > 0 && (
             <span className="common">
               {commonInterests.slice(0, 3).map((i) => (
@@ -136,6 +141,8 @@ export default function ChatRoom({ chat, video }) {
         onSend={sendChat}
         onTyping={setTyping}
         onNext={next}
+        myMood={myMood}
+        partnerMood={partnerMood || 'any'}
         stage={showVideo ? null : stage}
         confetti={!showVideo && matchCount > 0 && status === 'chatting' ? <Confetti key={matchCount} /> : null}
       />

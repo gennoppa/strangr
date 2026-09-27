@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import InterestInput from './InterestInput.jsx';
-import { QUICK_INTERESTS, TAGLINES } from '../copy.js';
+import { MOODS, QUICK_INTERESTS, TAGLINES } from '../copy.js';
 
-export default function Landing({ onStart, initialInterests = [] }) {
+export default function Landing({ onStart, initialInterests = [], initialMood = 'any' }) {
   const [interests, setInterests] = useState(initialInterests);
+  const [mood, setMood] = useState(initialMood);
   const [agreed, setAgreed] = useState(false);
   const [tagline, setTagline] = useState(0);
 
@@ -32,8 +33,32 @@ export default function Landing({ onStart, initialInterests = [] }) {
         </h2>
         <p key={tagline} className="tagline fade-swap">{TAGLINES[tagline]}</p>
 
+        <p className="field-label" id="mood-label">How are you feeling rn?</p>
+        <div className="mood-grid" role="radiogroup" aria-labelledby="mood-label">
+          {MOODS.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              role="radio"
+              aria-checked={mood === m.key}
+              className={`mood-card ${mood === m.key ? 'on' : ''} mood-${m.key}`}
+              onClick={() => setMood(m.key)}
+            >
+              <span className="mood-emoji" aria-hidden>{m.emoji}</span>
+              <span className="mood-label">{m.label}</span>
+              <span className="mood-desc">{m.desc}</span>
+            </button>
+          ))}
+        </div>
+        <p className="hint">
+          {mood === 'vent' ? 'We’ll match you with someone who picked 👂 Here to listen 💜'
+            : mood === 'listen' ? 'We’ll match you with someone who needs a kind ear 🫂'
+            : mood === 'any' ? 'No pressure — you’ll meet any vibe 🌈'
+            : 'We’ll find someone whose mood matches yours ✨'}
+        </p>
+
         <label className="field-label" htmlFor="interest-input">
-          Pick your vibes <span className="muted">(optional)</span>
+          Pick your interests <span className="muted">(optional)</span>
         </label>
         <div className="chip-grid">
           {QUICK_INTERESTS.map(({ emoji, label }) => (
@@ -60,10 +85,10 @@ export default function Landing({ onStart, initialInterests = [] }) {
         </label>
 
         <div className="start-buttons">
-          <button className="btn btn-primary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: true })}>
+          <button className="btn btn-primary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: true, mood })}>
             🎥 Start video chat
           </button>
-          <button className="btn btn-secondary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: false })}>
+          <button className="btn btn-secondary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: false, mood })}>
             💬 Text only
           </button>
         </div>

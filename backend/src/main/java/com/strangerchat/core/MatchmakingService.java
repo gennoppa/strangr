@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li>A user who entered interests only matches someone sharing at least one interest during the
  *       first {@code interestWait} of waiting; after that they fall back to anyone.</li>
+ *   <li>A user who picked a mood only matches a compatible mood (see {@link Mood#fits}) during the first
+ *       {@code moodWait} of waiting; after that mood is ignored too.</li>
  *   <li>Users never match someone they (or who) blocked/reported.</li>
  *   <li>Right after "Next", you won't be re-paired with the stranger you just left until the
  *       wait window passes (so two lone users still reconnect eventually).</li>
@@ -34,6 +36,7 @@ public class MatchmakingService {
 
     private final Clock clock;
     private final Duration interestWait;
+    private final Duration moodWait;
     private final ModerationService moderation;
 
     private final Map<String, Client> clients = new ConcurrentHashMap<>();
@@ -41,8 +44,13 @@ public class MatchmakingService {
     private final Map<String, Client> waiting = new LinkedHashMap<>();
 
     public MatchmakingService(Clock clock, Duration interestWait, ModerationService moderation) {
+        this(clock, interestWait, interestWait, moderation);
+    }
+
+    public MatchmakingService(Clock clock, Duration interestWait, Duration moodWait, ModerationService moderation) {
         this.clock = clock;
         this.interestWait = interestWait;
+        this.moodWait = moodWait;
         this.moderation = moderation;
     }
 
@@ -75,12 +83,18 @@ public class MatchmakingService {
 
     // ------------------------------------------------------------------ commands
 
-    /** Start (or restart) searching with the given interests. */
+    /** Start (or restart) searching with the given interests and no mood preference. */
     public synchronized void join(String clientId, Iterable<String> rawInterests) {
+        join(clientId, rawInterests, Mood.ANY);
+    }
+
+    /** Start (or restart) searching with the given interests and mood. */
+    public synchronized void join(String clientId, Iterable<String> rawInterests, Mood mood) {
         Client c = clients.get(clientId);
         if (c == null) return;
         if (kickIfBanned(c)) return;
         c.interests(sanitizeInterests(rawInterests));
+        c.mood(mood);
         endChat(c);
         enqueue(c);
     }
@@ -180,7 +194,7 @@ public class MatchmakingService {
         c.waitingSince(clock.instant());
         if (!tryMatch(c)) {
             waiting.put(c.id(), c);
-            c.send(Map.of("type", "waiting", "interests", List.copyOf(c.interests())));
+            c.send(Map.of("type", "waiting", "interests", List.copyOf(c.interests()), "mood", c.mood().key()));
         }
     }
 
@@ -199,17 +213,21 @@ public class MatchmakingService {
 
     private boolean compatible(Client a, Client b, Set<String> common, Instant now) {
         if (a.hasBlocked(b) || b.hasBlocked(a)) return false;
-        boolean freshA = isFresh(a, now);
-        boolean freshB = isFresh(b, now);
+        boolean freshA = isFresh(a, now, interestWait);
+        boolean freshB = isFresh(b, now, interestWait);
         boolean recentPair = b.id().equals(a.lastPartnerId()) || a.id().equals(b.lastPartnerId());
         if (recentPair && (freshA || freshB)) return false;
+        // Mood: while either side is still inside its mood window, moods must fit.
+        boolean moodStrict = (a.mood() != Mood.ANY && isFresh(a, now, moodWait))
+                || (b.mood() != Mood.ANY && isFresh(b, now, moodWait));
+        if (moodStrict && !a.mood().fits(b.mood())) return false;
         boolean strictA = freshA && !a.interests().isEmpty();
         boolean strictB = freshB && !b.interests().isEmpty();
         return common.isEmpty() ? !(strictA || strictB) : true;
     }
 
-    private boolean isFresh(Client c, Instant now) {
-        return c.waitingSince() != null && Duration.between(c.waitingSince(), now).compareTo(interestWait) < 0;
+    private static boolean isFresh(Client c, Instant now, Duration window) {
+        return c.waitingSince() != null && Duration.between(c.waitingSince(), now).compareTo(window) < 0;
     }
 
     private static Set<String> commonInterests(Client a, Client b) {
@@ -226,8 +244,18 @@ public class MatchmakingService {
         initiator.state(Client.State.CHATTING);
         responder.state(Client.State.CHATTING);
         List<String> commonList = List.copyOf(common);
-        initiator.send(Map.of("type", "matched", "initiator", true, "commonInterests", commonList));
-        responder.send(Map.of("type", "matched", "initiator", false, "commonInterests", commonList));
+        initiator.send(matchedMessage(true, commonList, initiator, responder));
+        responder.send(matchedMessage(false, commonList, responder, initiator));
+    }
+
+    private static Map<String, Object> matchedMessage(boolean initiator, List<String> common, Client me, Client partner) {
+        return Map.of(
+                "type", "matched",
+                "initiator", initiator,
+                "commonInterests", common,
+                "myMood", me.mood().key(),
+                "partnerMood", partner.mood().key(),
+                "perfectMood", me.mood().isPerfectWith(partner.mood()));
     }
 
     /** Ends the current chat (if any) and tells the partner. Does not requeue either side. */

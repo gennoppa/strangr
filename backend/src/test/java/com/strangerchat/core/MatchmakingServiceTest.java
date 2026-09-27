@@ -173,4 +173,89 @@ class MatchmakingServiceTest {
         mm.disconnect("a");
         assertEquals("partner_left", b.lastType());
     }
+
+    // ------------------------------------------------------------------ mood match
+
+    private MatchmakingService moodService() {
+        return new MatchmakingService(clock, Duration.ofSeconds(8), Duration.ofSeconds(12), moderation);
+    }
+
+    private Recorder connect(MatchmakingService svc, String id, String ip) {
+        Recorder r = new Recorder();
+        svc.connect(new Client(id, ip, r));
+        return r;
+    }
+
+    @Test
+    void ventIsPairedWithListenerNotAnotherVenter() {
+        MatchmakingService svc = moodService();
+        Recorder v1 = connect(svc, "v1", "1.1.1.1");
+        Recorder v2 = connect(svc, "v2", "2.2.2.2");
+        Recorder l = connect(svc, "l", "3.3.3.3");
+        svc.join("v1", List.of(), Mood.VENT);
+        svc.join("v2", List.of(), Mood.VENT);
+        assertEquals("waiting", v2.lastType()); // two venters don't pair
+        svc.join("l", List.of(), Mood.LISTEN);
+        assertEquals("matched", l.lastType());
+        assertEquals("matched", v1.lastType());
+        assertEquals("vent", l.last().get("partnerMood"));
+        assertEquals("listen", v1.last().get("partnerMood"));
+        assertEquals(true, v1.last().get("perfectMood"));
+        assertEquals("waiting", v2.lastType());
+    }
+
+    @Test
+    void moodFallsBackToAnyoneAfterMoodWait() {
+        MatchmakingService svc = moodService();
+        Recorder h = connect(svc, "h", "1.1.1.1");
+        Recorder v = connect(svc, "v", "2.2.2.2");
+        svc.join("h", List.of(), Mood.HYPED);
+        svc.join("v", List.of(), Mood.VENT);
+        clock.advance(Duration.ofSeconds(9)); // past interest wait, still inside mood wait
+        svc.tick();
+        assertEquals("waiting", h.lastType());
+        clock.advance(Duration.ofSeconds(4)); // past mood wait (12s)
+        svc.tick();
+        assertEquals("matched", h.lastType());
+        assertEquals("matched", v.lastType());
+        assertEquals(false, h.last().get("perfectMood"));
+    }
+
+    @Test
+    void anyMoodMatchesEveryone() {
+        MatchmakingService svc = moodService();
+        Recorder a = connect(svc, "a", "1.1.1.1");
+        Recorder b = connect(svc, "b", "2.2.2.2");
+        svc.join("a", List.of(), Mood.VENT);
+        svc.join("b", List.of(), Mood.ANY);
+        assertEquals("matched", a.lastType());
+        assertEquals("any", a.last().get("partnerMood"));
+        assertEquals("vent", b.last().get("partnerMood"));
+    }
+
+    @Test
+    void moodAndInterestsCombine() {
+        MatchmakingService svc = moodService();
+        Recorder a = connect(svc, "a", "1.1.1.1");
+        Recorder b = connect(svc, "b", "2.2.2.2");
+        Recorder c = connect(svc, "c", "3.3.3.3");
+        svc.join("a", List.of("anime"), Mood.DEEP);
+        svc.join("b", List.of("anime"), Mood.HYPED); // shares interest but mood clashes
+        assertEquals("waiting", b.lastType());
+        svc.join("c", List.of("anime"), Mood.LISTEN); // shares interest AND fits deep
+        assertEquals("matched", c.lastType());
+        assertEquals("matched", a.lastType());
+        assertEquals(List.of("anime"), a.last().get("commonInterests"));
+    }
+
+    @Test
+    void moodFitsIsSymmetric() {
+        for (Mood x : Mood.values()) {
+            for (Mood y : Mood.values()) {
+                assertEquals(x.fits(y), y.fits(x), x + " vs " + y);
+            }
+        }
+        assertEquals(Mood.ANY, Mood.parse("nonsense"));
+        assertEquals(Mood.VENT, Mood.parse(" Vent "));
+    }
 }

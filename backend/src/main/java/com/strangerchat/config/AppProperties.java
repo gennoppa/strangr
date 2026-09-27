@@ -18,15 +18,18 @@ public record AppProperties(
         List<IceServer> iceServers) {
 
     public AppProperties {
-        if (matching == null) matching = new Matching(Duration.ofSeconds(8));
+        if (matching == null) matching = new Matching(Duration.ofSeconds(8), Duration.ofSeconds(12));
         if (moderation == null) moderation = new Moderation(3, Duration.ofHours(1), Duration.ofHours(24));
         if (iceServers == null || iceServers.isEmpty()) {
             iceServers = List.of(new IceServer(List.of("stun:stun.l.google.com:19302"), null, null));
         }
     }
 
-    /** @param interestWait how long a user with interests waits for a shared-interest match before going random */
-    public record Matching(@DefaultValue("8s") Duration interestWait) {}
+    /**
+     * @param interestWait how long a user with interests waits for a shared-interest match before going random
+     * @param moodWait     how long a user with a mood waits for a compatible mood before going random
+     */
+    public record Matching(@DefaultValue("8s") Duration interestWait, @DefaultValue("12s") Duration moodWait) {}
 
     /**
      * @param reportThreshold distinct reporters needed to ban an IP

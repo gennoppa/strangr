@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BLOCKED, MATCHED, NO_CAMERA, PARTNER_LEFT, REPORTED, VIDEO_FAILED, commonLine, pick } from '../copy.js';
+import { BLOCKED, MATCHED, NO_CAMERA, PARTNER_LEFT, REPORTED, VIDEO_FAILED, commonLine, moodMatchLines, pick } from '../copy.js';
 
 /**
  * Owns the signaling WebSocket, the WebRTC peer connection and the chat state.
@@ -20,6 +20,8 @@ export function useStrangerChat() {
   const [messages, setMessages] = useState([]);
   const [strangerTyping, setStrangerTyping] = useState(false);
   const [commonInterests, setCommonInterests] = useState([]);
+  const [myMood, setMyMood] = useState('any');
+  const [partnerMood, setPartnerMood] = useState(null);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [micOn, setMicOn] = useState(true);
@@ -145,6 +147,7 @@ export function useStrangerChat() {
           closePeer();
           setStatus('waiting');
           setCommonInterests([]);
+          setPartnerMood(null);
           setConnectionIssue(null);
           break;
         case 'matched': {
@@ -153,6 +156,10 @@ export function useStrangerChat() {
           setConnectionIssue(null);
           push('system', pick(MATCHED), 'match');
           if (msg.commonInterests?.length) push('system', commonLine(msg.commonInterests), 'common');
+          setPartnerMood(msg.partnerMood || 'any');
+          moodMatchLines(msg.myMood, msg.partnerMood, msg.perfectMood).forEach((line) =>
+            push('system', line, msg.perfectMood ? 'mood perfect' : 'mood')
+          );
           setStatus('chatting');
           signalQueueRef.current = signalQueueRef.current.then(() => createPeer(msg.initiator)).catch(console.warn);
           break;
@@ -242,8 +249,9 @@ export function useStrangerChat() {
   // ------------------------------------------------------------ public actions
 
   const start = useCallback(
-    async (interests, { video }) => {
+    async (interests, { video, mood = 'any' }) => {
       setStatus('connecting');
+      setMyMood(mood);
       setMessages([]);
       setConnectionIssue(null);
 
@@ -272,7 +280,7 @@ export function useStrangerChat() {
 
       try {
         await connect();
-        send({ type: 'join', interests });
+        send({ type: 'join', interests, mood });
       } catch (err) {
         if (err.message !== 'banned') {
           setStatus('disconnected');
@@ -346,7 +354,7 @@ export function useStrangerChat() {
   );
 
   return {
-    status, messages, strangerTyping, commonInterests, localStream, remoteStream,
+    status, messages, strangerTyping, commonInterests, myMood, partnerMood, localStream, remoteStream,
     micOn, camOn, banUntil, connectionIssue,
     start, next, leave, sendChat, setTyping, report, block, toggleMic, toggleCam,
   };

@@ -20,13 +20,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.strangerchat.core.Client;
 import com.strangerchat.core.MatchmakingService;
 import com.strangerchat.core.MessageSender;
+import com.strangerchat.core.Mood;
 
 /**
  * JSON-over-WebSocket protocol.
  *
  * <pre>
  * client → server                         server → client
- *  {type:"join", interests:[..]}           {type:"hello", id}
+ *  {type:"join", interests:[..], mood}     {type:"hello", id}
  *  {type:"next"}                           {type:"waiting", interests}
  *  {type:"stop"}                           {type:"matched", initiator, commonInterests}
  *  {type:"signal", data:{sdp|candidate}}   {type:"signal", data}
@@ -79,7 +80,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (msg == null || !msg.hasNonNull("type")) return;
 
         switch (msg.get("type").asText()) {
-            case "join" -> matchmaking.join(id, readInterests(msg.get("interests")));
+            case "join" -> matchmaking.join(id, readInterests(msg.get("interests")), Mood.parse(msg.path("mood").asText(null)));
             case "next" -> matchmaking.next(id);
             case "stop" -> matchmaking.stop(id);
             case "signal" -> matchmaking.signal(id, msg.get("data"));

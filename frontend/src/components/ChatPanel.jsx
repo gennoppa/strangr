@@ -3,7 +3,7 @@ import { pickIcebreakers } from '../copy.js';
 
 const EMOJIS = ['😂', '😍', '🔥', '👋', '😎', '🥹', '💀', '🙌', '✨', '🤝', '😭', '👀'];
 
-export default function ChatPanel({ messages, status, strangerTyping, onSend, onTyping, onNext, stage, confetti }) {
+export default function ChatPanel({ messages, status, strangerTyping, onSend, onTyping, onNext, stage, confetti, myMood = 'any', partnerMood = 'any' }) {
   const [draft, setDraft] = useState('');
   const [icebreakers, setIcebreakers] = useState(() => pickIcebreakers());
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -21,14 +21,15 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
   useEffect(() => {
     if (canChat) {
       inputRef.current?.focus();
-      setIcebreakers(pickIcebreakers());
+      setIcebreakers(pickIcebreakers(3, myMood, partnerMood));
     } else {
       setEmojiOpen(false);
       setDraft('');
       clearTimeout(typingTimer.current);
       isTyping.current = false;
     }
-  }, [canChat]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canChat, partnerMood]);
 
   useEffect(() => () => clearTimeout(typingTimer.current), []);
 

@@ -19,6 +19,7 @@ public final class Client {
 
     private State state = State.IDLE;
     private Set<String> interests = Collections.emptySet();
+    private Mood mood = Mood.ANY;
     private Instant waitingSince;
     private Client partner;
     private String lastPartnerId;
@@ -42,6 +43,9 @@ public final class Client {
 
     Set<String> interests() { return interests; }
     void interests(Set<String> interests) { this.interests = Collections.unmodifiableSet(new LinkedHashSet<>(interests)); }
+
+    Mood mood() { return mood; }
+    void mood(Mood mood) { this.mood = mood == null ? Mood.ANY : mood; }
 
     Instant waitingSince() { return waitingSince; }
     void waitingSince(Instant t) { this.waitingSince = t; }

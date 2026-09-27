@@ -26,6 +26,8 @@ app:
   matching:
     # Users with interests wait this long for a shared-interest match before being paired randomly.
     interest-wait: 8s
+    # Users who pick a mood wait this long for a compatible mood (e.g. vent <-> listen) before anyone.
+    mood-wait: 12s
 
   moderation:
     report-threshold: 3   # distinct reporter IPs needed to ban

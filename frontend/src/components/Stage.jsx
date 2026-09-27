@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SEARCHING, pick } from '../copy.js';
+import { MOOD_SEARCHING, SEARCHING, moodInfo, pick } from '../copy.js';
 
 /** Radar-style "searching" animation with rotating fun copy. */
-export function Searching({ compact = false }) {
-  const [i, setI] = useState(() => Math.floor(Math.random() * SEARCHING.length));
+export function Searching({ compact = false, mood = 'any' }) {
+  // Mood-specific lines first, then the general ones.
+  const lines = useMemo(() => [...(MOOD_SEARCHING[mood] || []), ...SEARCHING], [mood]);
+  const [i, setI] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setI((n) => (n + 1) % SEARCHING.length), 2200);
+    const t = setInterval(() => setI((n) => (n + 1) % lines.length), 2200);
     return () => clearInterval(t);
-  }, []);
+  }, [lines]);
+  const m = moodInfo(mood);
 
   return (
     <div className={`stage ${compact ? 'compact' : ''}`}>
@@ -15,9 +18,10 @@ export function Searching({ compact = false }) {
         <span />
         <span />
         <span />
-        <div className="radar-core">🔎</div>
+        <div className="radar-core">{mood !== 'any' ? m.emoji : '🔎'}</div>
       </div>
-      <p key={i} className="stage-text fade-swap">{SEARCHING[i]}</p>
+      <p key={i} className="stage-text fade-swap">{lines[i % lines.length]}</p>
+      {mood !== 'any' && <span className={`mood-pill mood-${mood}`}>Your mood: {m.emoji} {m.label}</span>}
       <p className="stage-sub">Tip: press <kbd>Esc</kbd> anytime to skip</p>
     </div>
   );

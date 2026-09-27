@@ -72,6 +72,78 @@ export const ICEBREAKERS = [
   'Morning person or night owl? 🌞🦉',
 ];
 
-export const pickIcebreakers = (n = 3) => [...ICEBREAKERS].sort(() => Math.random() - 0.5).slice(0, n);
+const MOOD_ICEBREAKERS = {
+  support: [
+    "What's on your mind? I'm all ears 👂",
+    'How has your day really been? 💭',
+    "Want to talk about it? No judgment here 💜",
+    'What would make today a little better? 🌤️',
+    "I'm here to listen — take your time 🫂",
+  ],
+  deep: [
+    "What's something you've changed your mind about? 🤔",
+    'What would you do if you knew you couldn’t fail? 🚀',
+    "What's a memory you'd relive? 🌙",
+    'Do you believe in fate or coincidence? 🌌',
+    'What does a perfect life look like to you? ✨',
+  ],
+  hyped: [
+    "What's the most chaotic thing you've done? 😂",
+    'Rate your current energy 1–10 ⚡',
+    'Best party song ever? 🎶',
+    "What's your go-to hype move? 🕺",
+  ],
+};
+
+/** Icebreakers suited to the chat's mood (falls back to the general list). */
+export const pickIcebreakers = (n = 3, myMood = 'any', partnerMood = 'any') => {
+  const moods = [myMood, partnerMood];
+  const pool = moods.includes('vent') || moods.includes('listen') ? MOOD_ICEBREAKERS.support
+    : moods.includes('deep') ? MOOD_ICEBREAKERS.deep
+    : moods.includes('hyped') ? [...MOOD_ICEBREAKERS.hyped, ...ICEBREAKERS]
+    : ICEBREAKERS;
+  return [...pool].sort(() => Math.random() - 0.5).slice(0, n);
+};
 
 export const ENDED_TITLES = ['They left the chat 💨', 'Chat ended 👋', 'That’s a wrap 🎬'];
+
+// ---------------------------------------------------------------- mood match
+
+export const MOODS = [
+  { key: 'hyped', emoji: '🥳', label: 'Hyped', desc: 'fun & good energy', partner: 'is hyped' },
+  { key: 'bored', emoji: '😴', label: 'Bored', desc: 'entertain me pls', partner: 'is bored' },
+  { key: 'vent', emoji: '😮‍💨', label: 'Need to vent', desc: 'just need to talk', partner: 'needs to vent' },
+  { key: 'listen', emoji: '👂', label: 'Here to listen', desc: 'happy to support', partner: 'is here to listen' },
+  { key: 'deep', emoji: '🤔', label: 'Deep talks', desc: 'life, dreams, 3am thoughts', partner: 'wants deep talks' },
+  { key: 'any', emoji: '🎲', label: 'Surprise me', desc: 'any vibe works', partner: 'is up for anything' },
+];
+
+export const moodInfo = (key) => MOODS.find((m) => m.key === key) || MOODS[MOODS.length - 1];
+
+/** Rotating search lines tailored to the mood you picked. */
+export const MOOD_SEARCHING = {
+  hyped: ['Finding someone with matching energy ⚡', 'Loading a fellow hype machine 🥳', 'Turning the volume up 🔊'],
+  bored: ['Hunting down some entertainment 🍿', 'Finding someone to kill boredom with 🎯', 'Boredom ends in 3… 2… 1… ⏳'],
+  vent: ['Finding someone who’ll really listen 👂', 'A kind ear is on the way 💜', 'Hang in there — someone’s coming 🫂'],
+  listen: ['Finding someone who needs a friend 💜', 'Someone out there needs you rn 🫂', 'Warming up your listening ears 👂'],
+  deep: ['Finding a fellow overthinker 🌌', 'Searching for 3am-conversation energy 🌙', 'Diving into the deep end 🌊'],
+};
+
+/** System lines shown right after a match, based on both moods. */
+export function moodMatchLines(my, partner, perfect) {
+  const p = moodInfo(partner);
+  if (my === 'listen' && partner === 'vent')
+    return ['💜 They need to vent — you’re the listener. No judging, just vibes 🫂'];
+  if (my === 'vent' && partner === 'listen')
+    return ['👂 You got a good listener. Let it all out 💜'];
+  if (perfect && my === partner) {
+    const same = {
+      hyped: '⚡ Double hype! Energy levels: dangerously high 🥳🥳',
+      bored: '😴 Two bored souls united. Time to fix that 🎯',
+      deep: '🌌 Two deep thinkers. Get philosophical 🤔',
+    };
+    if (same[my]) return [same[my]];
+  }
+  if (partner && partner !== 'any') return [`${p.emoji} Stranger ${p.partner}`];
+  return [];
+}

@@ -351,3 +351,42 @@ kbd {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .confetti { display: none; }
 }
+
+/* ---------- mood match ---------- */
+.mood-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+.mood-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px 10px; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--stroke); border-radius: 18px; color: var(--text); text-align: center;
+  transition: transform 0.25s var(--spring), background 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+.mood-card:hover { transform: translateY(-3px); background: var(--glass-strong); }
+.mood-card:active { transform: scale(0.95); }
+.mood-card:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.mood-emoji { font-size: 30px; line-height: 1.1; transition: transform 0.35s var(--spring); }
+.mood-card.on .mood-emoji { transform: scale(1.25) rotate(-6deg); }
+.mood-label { font-weight: 700; font-size: 14px; }
+.mood-desc { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.mood-card.on { border-color: var(--mood-c, var(--pink)); background: color-mix(in srgb, var(--mood-c, var(--pink)) 16%, transparent);
+  box-shadow: 0 0 0 1px var(--mood-c, var(--pink)) inset, 0 8px 22px color-mix(in srgb, var(--mood-c, var(--pink)) 30%, transparent); }
+.mood-hyped { --mood-c: #ffd23f; }
+.mood-bored { --mood-c: #8fa3ff; }
+.mood-vent { --mood-c: #ff7a9c; }
+.mood-listen { --mood-c: #3ddc97; }
+.mood-deep { --mood-c: #a78bfa; }
+.mood-any { --mood-c: #00d4ff; }
+
+.mood-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  color: var(--mood-c); border: 1px solid color-mix(in srgb, var(--mood-c) 55%, transparent);
+  background: color-mix(in srgb, var(--mood-c) 14%, transparent); animation: popIn 0.4s var(--spring) both; white-space: nowrap;
+}
+.sys-msg.mood { color: var(--text); border-color: rgba(167, 139, 250, 0.45); background: rgba(167, 139, 250, 0.12); }
+.sys-msg.mood.perfect { background: linear-gradient(135deg, rgba(61, 220, 151, 0.18), rgba(167, 139, 250, 0.18)); border-color: rgba(61, 220, 151, 0.5); font-weight: 600; }
+
+@media (max-width: 820px) {
+  .mood-grid { gap: 8px; }
+  .mood-card { padding: 10px 4px 8px; }
+  .mood-emoji { font-size: 26px; }
+  .mood-desc { display: none; }
+  .mood-pill-text { display: none; }
+}

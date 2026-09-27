@@ -29,10 +29,12 @@ export default function App() {
   const chat = useStrangerChat();
   const [video, setVideo] = useState(true);
   const [interests, setInterests] = useState([]);
+  const [mood, setMood] = useState('any');
 
   const start = (tags, opts) => {
     setInterests(tags);
     setVideo(opts.video);
+    setMood(opts.mood || 'any');
     chat.start(tags, opts);
   };
 
@@ -51,13 +53,13 @@ export default function App() {
     content = (
       <Screen emoji="📡" title="Oops, we lost the signal">
         <p className="muted">Looks like your connection dropped. Let's get you back in!</p>
-        <button className="btn btn-primary btn-big" onClick={() => chat.start(interests, { video })}>
+        <button className="btn btn-primary btn-big" onClick={() => chat.start(interests, { video, mood })}>
           🔄 Reconnect
         </button>
       </Screen>
     );
   } else if (chat.status === 'idle') {
-    content = <Landing onStart={start} initialInterests={interests} />;
+    content = <Landing onStart={start} initialInterests={interests} initialMood={mood} />;
   } else {
     content = <ChatRoom chat={chat} video={video} />;
   }

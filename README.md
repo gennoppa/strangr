@@ -8,6 +8,7 @@ Random 1-on-1 **video + text** chat with strangers.
 
 ## Features
 
+- **Mood match**: pick a mood (🥳 hyped, 😴 bored, 😮‍💨 need to vent, 👂 here to listen, 🤔 deep talks, 🎲 any); venters get listeners, compatible moods pair first, falls back to anyone after 12 s
 - Random matching, with **interest-based matching** (shared tags first, falls back to random after 8 s)
 - Video + audio chat, or **text-only** mode (text-only users can still see/hear the stranger)
 - Text chat with "Stranger is typing…" indicator
@@ -118,6 +119,7 @@ Render → service → **Settings → Custom Domains**; free TLS is included. Th
 | `app.allowed-origins` | localhost:5173/8080/3000 | Origins allowed to open the WebSocket |
 | `app.trust-proxy-headers` | `false` | Use `X-Forwarded-For` for client IP (bans) |
 | `app.matching.interest-wait` | `8s` | How long to wait for a shared-interest match before going random |
+| `app.matching.mood-wait` | `12s` | How long to wait for a compatible mood before matching anyone |
 | `app.moderation.report-threshold` | `3` | Distinct reporter IPs needed to ban |
 | `app.moderation.report-window` | `1h` | Reports older than this are forgotten |
 | `app.moderation.ban-duration` | `24h` | Ban length |
@@ -129,9 +131,9 @@ Any property can be overridden with an env var, e.g. `APP_MATCHING_INTEREST_WAIT
 
 | Client → server | Server → client |
 |---|---|
-| `{type:"join", interests:["music"]}` | `{type:"hello", id}` |
+| `{type:"join", interests:["music"], mood:"vent"}` | `{type:"hello", id}` |
 | `{type:"next"}` / `{type:"stop"}` | `{type:"waiting", interests}` |
-| `{type:"signal", data:{sdp}\|{candidate}}` | `{type:"matched", initiator, commonInterests}` |
+| `{type:"signal", data:{sdp}\|{candidate}}` | `{type:"matched", initiator, commonInterests, myMood, partnerMood, perfectMood}` |
 | `{type:"chat", text}` | `{type:"signal", data}` / `{type:"chat", text}` |
 | `{type:"typing", typing:true}` | `{type:"typing", typing}` |
 | `{type:"block"}` / `{type:"report", reason}` | `{type:"partner_left"}` / `{type:"blocked"}` / `{type:"reported"}` |

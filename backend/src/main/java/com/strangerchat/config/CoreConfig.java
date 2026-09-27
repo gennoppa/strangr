@@ -25,6 +25,6 @@ public class CoreConfig {
 
     @Bean
     MatchmakingService matchmakingService(Clock clock, AppProperties props, ModerationService moderation) {
-        return new MatchmakingService(clock, props.matching().interestWait(), moderation);
+        return new MatchmakingService(clock, props.matching().interestWait(), props.matching().moodWait(), moderation);
     }
 }
