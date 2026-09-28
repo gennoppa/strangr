@@ -2,10 +2,41 @@ import { useEffect, useState } from 'react';
 import InterestInput from './InterestInput.jsx';
 import { MOODS, QUICK_INTERESTS, TAGLINES } from '../copy.js';
 
+// Safety preferences are remembered on this device (per-viewer convenience only).
+function usePref(key, fallback) {
+  const [value, setValue] = useState(() => {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? fallback : v === '1';
+    } catch { return fallback; }
+  });
+  const update = (v) => {
+    setValue(v);
+    try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* storage unavailable */ }
+  };
+  return [value, update];
+}
+
+function Toggle({ checked, onChange, emoji, title, desc }) {
+  return (
+    <label className={`safety-toggle ${checked ? 'on' : ''}`}>
+      <span className="st-emoji" aria-hidden>{emoji}</span>
+      <span className="st-text">
+        <b>{title}</b>
+        <span>{desc}</span>
+      </span>
+      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="switch" aria-hidden><span className="knob" /></span>
+    </label>
+  );
+}
+
 export default function Landing({ onStart, initialInterests = [], initialMood = 'any' }) {
   const [interests, setInterests] = useState(initialInterests);
   const [mood, setMood] = useState(initialMood);
   const [agreed, setAgreed] = useState(false);
+  const [blur, setBlur] = usePref('strangr.blur', true);
+  const [textFirst, setTextFirst] = usePref('strangr.textFirst', true);
   const [tagline, setTagline] = useState(0);
 
   // Rotate the tagline every few seconds.
@@ -76,6 +107,25 @@ export default function Landing({ onStart, initialInterests = [], initialMood = 
         <InterestInput value={interests} onChange={setInterests} />
         <p className="hint">We'll find someone who shares your vibe first, then anyone awesome 🌈</p>
 
+        <p className="field-label">Your safety, your rules 🛡️</p>
+        <div className="safety-list">
+          <Toggle
+            checked={textFirst}
+            onChange={setTextFirst}
+            emoji="💬"
+            title="Text first"
+            desc="Video turns on only when you both agree"
+          />
+          <Toggle
+            checked={blur}
+            onChange={setBlur}
+            emoji="🎭"
+            title="Blur until I reveal"
+            desc="Stranger's video stays blurred until you tap Reveal"
+          />
+        </div>
+        <p className="hint">🔒 Always on: personal-info warnings, hidden links and one-tap 🚨 Leave &amp; Report.</p>
+
         <label className={`agree ${agreed ? 'checked' : ''}`}>
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
           <span className="check" aria-hidden>{agreed ? '✓' : ''}</span>
@@ -88,10 +138,10 @@ export default function Landing({ onStart, initialInterests = [], initialMood = 
         </label>
 
         <div className="start-buttons">
-          <button className="btn btn-primary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: true, mood })}>
+          <button className="btn btn-primary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: true, mood, blur, textFirst })}>
             🎥 Start video chat
           </button>
-          <button className="btn btn-secondary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: false, mood })}>
+          <button className="btn btn-secondary btn-big" disabled={!agreed} onClick={() => onStart(interests, { video: false, mood, blur, textFirst })}>
             💬 Text only
           </button>
         </div>

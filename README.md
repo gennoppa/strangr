@@ -9,6 +9,7 @@ Random 1-on-1 **video + text** chat with strangers.
 ## Features
 
 - **Mood match**: pick a mood (🥳 hyped, 😴 bored, 😮‍💨 need to vent, 👂 here to listen, 🤔 deep talks, 🎲 any); venters get listeners, compatible moods pair first, falls back to anyone after 12 s
+- **Safety controls**: 💬 *Text first* (video + audio only when BOTH people tap “Turn on video”, enforced on both ends), 🎭 *Blur until I reveal*, personal-info warnings (phone/email/UPI/socials/links/addresses), hidden links from strangers, one-tap 🚨 Leave & Report
 - Random matching, with **interest-based matching** (shared tags first, falls back to random after 8 s)
 - Video + audio chat, or **text-only** mode (text-only users can still see/hear the stranger)
 - Text chat with "Stranger is typing…" indicator

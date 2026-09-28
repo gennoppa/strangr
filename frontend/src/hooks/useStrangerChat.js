@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BLOCKED, MATCHED, NO_CAMERA, PARTNER_LEFT, REPORTED, VIDEO_FAILED, commonLine, moodMatchLines, pick } from '../copy.js';
+import {
+  BLOCKED, MATCHED, NO_CAMERA, PARTNER_LEFT, REPORTED, VIDEO_FAILED, SAFETY,
+  commonLine, moodMatchLines, pick,
+} from '../copy.js';
 
 /**
  * Owns the signaling WebSocket, the WebRTC peer connection and the chat state.
  *
  * status: 'idle' | 'connecting' | 'waiting' | 'chatting' | 'ended' | 'disconnected' | 'banned'
+ *
+ * Safety model
+ * ------------
+ * • Mutual video consent ("text first"): each side sends {consent:{video}} over the signaling relay.
+ *   Video+audio flow only while BOTH have consented. Enforced on both ends:
+ *     – sender: the tracks we transmit are clones whose `enabled` flag stays false until both agree
+ *       (disabled tracks send black frames / silence);
+ *     – receiver: the stranger's video is hidden and muted until both agree.
+ * • Blur-to-reveal: the stranger's video is blurred locally until you tap Reveal.
  */
 
 const DEFAULT_ICE = [{ urls: ['stun:stun.l.google.com:19302'] }];
@@ -29,14 +41,25 @@ export function useStrangerChat() {
   const [banUntil, setBanUntil] = useState(null);
   const [connectionIssue, setConnectionIssue] = useState(null);
 
+  // Safety state
+  const [myVideoOk, setMyVideoOk] = useState(false);
+  const [partnerVideoOk, setPartnerVideoOk] = useState(false);
+  const [partnerHasCam, setPartnerHasCam] = useState(true);
+  const [revealed, setRevealed] = useState(false);
+  const videoActive = myVideoOk && partnerVideoOk;
+
   const wsRef = useRef(null);
   const pcRef = useRef(null);
-  const localStreamRef = useRef(null);
+  const localStreamRef = useRef(null); // for your own preview
+  const sendStreamRef = useRef(null); // cloned tracks actually sent to the stranger
   const iceServersRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const signalQueueRef = useRef(Promise.resolve());
   const pingTimerRef = useRef(null);
   const intentionalCloseRef = useRef(false);
+  const settingsRef = useRef({ blur: true, textFirst: true });
+  const consentRef = useRef({ mine: false, partner: false, myAuto: false });
+  const togglesRef = useRef({ mic: true, cam: true });
 
   const push = useCallback((from, text, kind) => {
     setMessages((m) => [...m, { id: ++msgSeq, from, text, kind }]);
@@ -46,6 +69,28 @@ export function useStrangerChat() {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
+
+  // ------------------------------------------------------------ media gating
+
+  /** Enable the transmitted tracks only while both sides consent (and the user hasn't muted). */
+  const applySendTracks = useCallback(() => {
+    const stream = sendStreamRef.current;
+    if (!stream) return;
+    const active = consentRef.current.mine && consentRef.current.partner;
+    stream.getVideoTracks().forEach((t) => { t.enabled = active && togglesRef.current.cam; });
+    stream.getAudioTracks().forEach((t) => { t.enabled = active && togglesRef.current.mic; });
+  }, []);
+
+  const setConsent = useCallback((patch) => {
+    consentRef.current = { ...consentRef.current, ...patch };
+    if ('mine' in patch) setMyVideoOk(patch.mine);
+    if ('partner' in patch) setPartnerVideoOk(patch.partner);
+    applySendTracks();
+  }, [applySendTracks]);
+
+  const sendConsent = useCallback((ok, auto = false) => {
+    send({ type: 'signal', data: { consent: { video: ok, cam: !!sendStreamRef.current, auto } } });
+  }, [send]);
 
   // ------------------------------------------------------------ WebRTC
 
@@ -59,12 +104,17 @@ export function useStrangerChat() {
       pc.onconnectionstatechange = null;
       pc.close();
     }
+    // Never leave video/audio flowing between chats.
+    consentRef.current = { mine: false, partner: false, myAuto: false };
+    setMyVideoOk(false);
+    setPartnerVideoOk(false);
+    applySendTracks();
     setRemoteStream(null);
     setStrangerTyping(false);
-  }, []);
+  }, [applySendTracks]);
 
   const addLocalTracks = (pc) => {
-    const stream = localStreamRef.current;
+    const stream = sendStreamRef.current;
     if (stream) {
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       return true;
@@ -74,7 +124,9 @@ export function useStrangerChat() {
 
   const createPeer = useCallback(
     async (initiator) => {
-      closePeer();
+      const prev = pcRef.current;
+      if (prev) prev.close();
+      pendingCandidatesRef.current = [];
       const pc = new RTCPeerConnection({ iceServers: iceServersRef.current || DEFAULT_ICE });
       pcRef.current = pc;
 
@@ -87,16 +139,13 @@ export function useStrangerChat() {
       };
       pc.onconnectionstatechange = () => {
         if (pcRef.current !== pc) return;
-        if (pc.connectionState === 'failed') {
-          setConnectionIssue(VIDEO_FAILED);
-        } else if (pc.connectionState === 'connected') {
-          setConnectionIssue(null);
-        }
+        if (pc.connectionState === 'failed') setConnectionIssue(VIDEO_FAILED);
+        else if (pc.connectionState === 'connected') setConnectionIssue(null);
       };
 
       if (initiator) {
         if (!addLocalTracks(pc)) {
-          // Text-only user: still receive the stranger's audio/video.
+          // Text-only user: can still receive the stranger's audio/video (once both consent).
           pc.addTransceiver('audio', { direction: 'recvonly' });
           pc.addTransceiver('video', { direction: 'recvonly' });
         }
@@ -106,7 +155,7 @@ export function useStrangerChat() {
         send({ type: 'signal', data: { sdp: pc.localDescription } });
       }
     },
-    [closePeer, send]
+    [send]
   );
 
   const handleSignal = useCallback(
@@ -138,6 +187,26 @@ export function useStrangerChat() {
     [send]
   );
 
+  /** Stranger changed their video consent. */
+  const handleConsent = useCallback(
+    (c) => {
+      const was = consentRef.current.partner;
+      const now = !!c.video;
+      setPartnerHasCam(c.cam !== false);
+      setConsent({ partner: now });
+      if (now && !was) {
+        if (consentRef.current.mine) {
+          if (!(c.auto && consentRef.current.myAuto)) push('system', SAFETY.bothOn, 'safe');
+        } else {
+          push('system', SAFETY.partnerReady, 'safe');
+        }
+      } else if (!now && was) {
+        push('system', SAFETY.partnerOff, 'safe');
+      }
+    },
+    [push, setConsent]
+  );
+
   // ------------------------------------------------------------ WebSocket
 
   const handleServerMessage = useCallback(
@@ -151,6 +220,7 @@ export function useStrangerChat() {
           setConnectionIssue(null);
           break;
         case 'matched': {
+          closePeer(); // resets consent → media stays off until both agree
           setMessages([]);
           setCommonInterests(msg.commonInterests || []);
           setConnectionIssue(null);
@@ -160,12 +230,24 @@ export function useStrangerChat() {
           moodMatchLines(msg.myMood, msg.partnerMood, msg.perfectMood).forEach((line) =>
             push('system', line, msg.perfectMood ? 'mood perfect' : 'mood')
           );
+
+          // Safety defaults for this chat.
+          const { blur, textFirst } = settingsRef.current;
+          setRevealed(!blur);
+          setPartnerHasCam(true);
+          const autoOk = !textFirst;
+          consentRef.current.myAuto = autoOk;
+          setConsent({ mine: autoOk, partner: false });
+          sendConsent(autoOk, autoOk);
+          if (textFirst) push('system', SAFETY.textFirst, 'safe');
+
           setStatus('chatting');
           signalQueueRef.current = signalQueueRef.current.then(() => createPeer(msg.initiator)).catch(console.warn);
           break;
         }
         case 'signal':
-          signalQueueRef.current = signalQueueRef.current.then(() => handleSignal(msg.data));
+          if (msg.data?.consent) handleConsent(msg.data.consent);
+          else signalQueueRef.current = signalQueueRef.current.then(() => handleSignal(msg.data));
           break;
         case 'chat':
           setStrangerTyping(false);
@@ -203,7 +285,7 @@ export function useStrangerChat() {
           break;
       }
     },
-    [closePeer, createPeer, handleSignal, push]
+    [closePeer, createPeer, handleConsent, handleSignal, push, sendConsent, setConsent]
   );
 
   const connect = useCallback(() => {
@@ -249,7 +331,8 @@ export function useStrangerChat() {
   // ------------------------------------------------------------ public actions
 
   const start = useCallback(
-    async (interests, { video, mood = 'any' }) => {
+    async (interests, { video, mood = 'any', blur = true, textFirst = true }) => {
+      settingsRef.current = { blur, textFirst };
       setStatus('connecting');
       setMyMood(mood);
       setMessages([]);
@@ -262,6 +345,11 @@ export function useStrangerChat() {
             audio: { echoCancellation: true, noiseSuppression: true },
           });
           localStreamRef.current = stream;
+          // Separate copies for sending, so gating them never blanks your own preview.
+          const sendStream = new MediaStream(stream.getTracks().map((t) => t.clone()));
+          sendStream.getTracks().forEach((t) => { t.enabled = false; });
+          sendStreamRef.current = sendStream;
+          togglesRef.current = { mic: true, cam: true };
           setLocalStream(stream);
           setMicOn(true);
           setCamOn(true);
@@ -282,9 +370,7 @@ export function useStrangerChat() {
         await connect();
         send({ type: 'join', interests, mood });
       } catch (err) {
-        if (err.message !== 'banned') {
-          setStatus('disconnected');
-        }
+        if (err.message !== 'banned') setStatus('disconnected');
       }
     },
     [connect, push, send]
@@ -305,7 +391,9 @@ export function useStrangerChat() {
     send({ type: 'stop' });
     closePeer();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    sendStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    sendStreamRef.current = null;
     setLocalStream(null);
     setMessages([]);
     setStatus('idle');
@@ -322,23 +410,37 @@ export function useStrangerChat() {
     [push, send, status]
   );
 
+  /** Turn your video consent on/off for the current chat. */
+  const setVideoConsent = useCallback(
+    (ok) => {
+      if (status !== 'chatting' || consentRef.current.mine === ok) return;
+      consentRef.current.myAuto = false;
+      setConsent({ mine: ok });
+      sendConsent(ok);
+      if (!ok) push('system', SAFETY.youOff, 'safe');
+      else if (consentRef.current.partner) push('system', SAFETY.bothOn, 'safe');
+      else push('system', SAFETY.youWaiting, 'safe');
+    },
+    [push, sendConsent, setConsent, status]
+  );
+
   const setTyping = useCallback((typing) => send({ type: 'typing', typing }), [send]);
   const report = useCallback((reason) => send({ type: 'report', reason }), [send]);
   const block = useCallback(() => send({ type: 'block' }), [send]);
 
   const toggleMic = useCallback(() => {
-    const track = localStreamRef.current?.getAudioTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
-    setMicOn(track.enabled);
-  }, []);
+    if (!sendStreamRef.current) return;
+    togglesRef.current.mic = !togglesRef.current.mic;
+    setMicOn(togglesRef.current.mic);
+    applySendTracks();
+  }, [applySendTracks]);
 
   const toggleCam = useCallback(() => {
-    const track = localStreamRef.current?.getVideoTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
-    setCamOn(track.enabled);
-  }, []);
+    if (!sendStreamRef.current) return;
+    togglesRef.current.cam = !togglesRef.current.cam;
+    setCamOn(togglesRef.current.cam);
+    applySendTracks();
+  }, [applySendTracks]);
 
   // Clean up everything on unmount.
   useEffect(
@@ -349,6 +451,7 @@ export function useStrangerChat() {
       wsRef.current = null;
       pcRef.current?.close();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      sendStreamRef.current?.getTracks().forEach((t) => t.stop());
     },
     []
   );
@@ -356,6 +459,9 @@ export function useStrangerChat() {
   return {
     status, messages, strangerTyping, commonInterests, myMood, partnerMood, localStream, remoteStream,
     micOn, camOn, banUntil, connectionIssue,
+    // safety
+    myVideoOk, partnerVideoOk, videoActive, partnerHasCam, revealed, hasCamera: !!localStream,
+    reveal: () => setRevealed(true), hide: () => setRevealed(false), setVideoConsent,
     start, next, leave, sendChat, setTyping, report, block, toggleMic, toggleCam,
   };
 }

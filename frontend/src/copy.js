@@ -147,3 +147,45 @@ export function moodMatchLines(my, partner, perfect) {
   if (partner && partner !== 'any') return [`${p.emoji} Stranger ${p.partner}`];
   return [];
 }
+
+// ---------------------------------------------------------------- safety
+
+export const SAFETY = {
+  textFirst: '💬 Text first — video stays off until you BOTH tap “Turn on video” 🛡️',
+  partnerReady: '🎥 Stranger is ready for video — turn it on only if you’re comfy 💜',
+  youWaiting: '⏳ You’re ready for video — waiting for the stranger to agree',
+  bothOn: '✅ Video on — you both agreed. The stranger’s video stays blurred until you tap Reveal 👀',
+  partnerOff: '📴 Stranger turned video off',
+  youOff: '📴 You turned video off — back to text 💬',
+};
+
+/** Personal info we warn about before you send it (order matters: most specific first). */
+const PII_PATTERNS = [
+  { kind: 'email address', re: /[\w.+-]+@[\w-]+\.[a-z]{2,}(?:\.[a-z]{2,})?/i },
+  { kind: 'UPI / payment ID', re: /\b[\w.-]{2,}@(?:ok\w+|ybl|ibl|axl|apl|paytm|upi|pty\w*|icici|sbi|hdfc\w*|axis\w*|kotak|jio|airtel|fbl|yapl|rapl|abfspay|freecharge|ikwik|waicici|wahdfcbank|waaxis|wasbi)\b/i },
+  { kind: 'phone number', re: /(?:\+?\d[\s().-]*){10,14}/ },
+  { kind: 'social media handle', re: /\b(?:insta(?:gram)?|ig|snap(?:chat)?|sc|telegram|tg|whats\s?app|wa|discord|fb|facebook|twitter)\b\s*(?:id|handle|user(?:name)?|is|:|-|=|@)\s*(?:is\s*)?@?[\w.#]*[\d_.#][\w.#]*|\b(?:insta(?:gram)?|snap(?:chat)?|telegram|discord)\s*(?:id|handle|user(?:name)?)\b/i },
+  { kind: 'social media handle', re: /(?:^|\s)@[a-z0-9_.]{3,}/i },
+  { kind: 'link', re: /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|in|net|org|io|me|app|link|xyz|co|gg|ly|to|tv)\b(?:\/\S*)?/i },
+  { kind: 'home address', re: /\b(?:flat|house|h\.?\s?no|plot|sector|block|street|road|nagar|colony|apartment|apt)\b[\s.:#-]*\d+/i },
+];
+
+/** @returns the kind of personal info found in `text`, or null */
+export function detectPersonalInfo(text) {
+  for (const { kind, re } of PII_PATTERNS) if (re.test(text)) return kind;
+  return null;
+}
+
+/** Splits text into [{text, link:boolean}] so links from strangers can be hidden behind a tap. */
+export const LINK_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|in|net|org|io|me|app|link|xyz|co|gg|ly|to|tv)\b(?:\/\S*)?/gi;
+export function splitLinks(text) {
+  const parts = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    if (m.index > last) parts.push({ text: text.slice(last, m.index), link: false });
+    parts.push({ text: m[0], link: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), link: false });
+  return parts;
+}

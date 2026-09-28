@@ -45,11 +45,13 @@ function ChatApp() {
   const [video, setVideo] = useState(true);
   const [interests, setInterests] = useState([]);
   const [mood, setMood] = useState('any');
+  const [lastOpts, setLastOpts] = useState({ video: true });
 
   const start = (tags, opts) => {
     setInterests(tags);
     setVideo(opts.video);
     setMood(opts.mood || 'any');
+    setLastOpts(opts);
     chat.start(tags, opts);
   };
 
@@ -68,7 +70,7 @@ function ChatApp() {
     content = (
       <Screen emoji="📡" title="Oops, we lost the signal">
         <p className="muted">Looks like your connection dropped. Let's get you back in!</p>
-        <button className="btn btn-primary btn-big" onClick={() => chat.start(interests, { video, mood })}>
+        <button className="btn btn-primary btn-big" onClick={() => chat.start(interests, lastOpts)}>
           🔄 Reconnect
         </button>
       </Screen>

@@ -1,10 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { pickIcebreakers } from '../copy.js';
+import { detectPersonalInfo, pickIcebreakers, splitLinks } from '../copy.js';
 
 const EMOJIS = ['😂', '😍', '🔥', '👋', '😎', '🥹', '💀', '🙌', '✨', '🤝', '😭', '👀'];
 
-export default function ChatPanel({ messages, status, strangerTyping, onSend, onTyping, onNext, stage, confetti, myMood = 'any', partnerMood = 'any' }) {
+/** Stranger messages: links are hidden behind a tap (scam/phishing protection). */
+function StrangerText({ text }) {
+  const [shown, setShown] = useState(false);
+  const parts = splitLinks(text);
+  if (!parts.some((p) => p.link)) return text;
+  return parts.map((p, i) =>
+    !p.link ? <span key={i}>{p.text}</span>
+    : shown ? <span key={i} className="link-revealed">{p.text}</span>
+    : (
+      <button key={i} type="button" className="link-hidden" onClick={() => setShown(true)}
+        title="Links from strangers can be scams. Tap to show the text.">
+        🔗 link hidden · tap to show
+      </button>
+    )
+  );
+}
+
+export default function ChatPanel({ messages, status, strangerTyping, onSend, onTyping, onNext, stage, confetti, videoBar, myMood = 'any', partnerMood = 'any' }) {
   const [draft, setDraft] = useState('');
+  const [piiWarning, setPiiWarning] = useState(null); // kind of personal info detected in the draft
   const [icebreakers, setIcebreakers] = useState(() => pickIcebreakers());
   const [emojiOpen, setEmojiOpen] = useState(false);
   const logRef = useRef(null);
@@ -25,6 +43,7 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
     } else {
       setEmojiOpen(false);
       setDraft('');
+      setPiiWarning(null);
       clearTimeout(typingTimer.current);
       isTyping.current = false;
     }
@@ -43,6 +62,7 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
 
   const onChange = (e) => {
     setDraft(e.target.value);
+    if (piiWarning) setPiiWarning(null);
     if (!canChat) return;
     if (!isTyping.current) {
       isTyping.current = true;
@@ -52,13 +72,25 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
     typingTimer.current = setTimeout(stopTyping, 2000);
   };
 
-  const submit = (e) => {
-    e.preventDefault();
+  const doSend = () => {
     if (onSend(draft)) {
       setDraft('');
       setEmojiOpen(false);
+      setPiiWarning(null);
       stopTyping();
     }
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!draft.trim()) return;
+    // Personal-info shield: pause and ask before sharing contact details with a stranger.
+    const kind = detectPersonalInfo(draft);
+    if (kind) {
+      setPiiWarning(kind);
+      return;
+    }
+    doSend();
   };
 
   const addEmoji = (emo) => {
@@ -80,7 +112,9 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
             <div key={m.id} className={`sys-msg ${m.kind || ''}`}>{m.text}</div>
           ) : (
             <div key={m.id} className={`bubble-row ${m.from}`}>
-              <div className={`bubble ${m.from}`}>{m.text}</div>
+              <div className={`bubble ${m.from}`}>
+                {m.from === 'stranger' ? <StrangerText text={m.text} /> : m.text}
+              </div>
             </div>
           )
         )}
@@ -106,6 +140,24 @@ export default function ChatPanel({ messages, status, strangerTyping, onSend, on
           </div>
         )}
       </div>
+
+      {videoBar}
+
+      {piiWarning && (
+        <div className="pii-warning pop-in" role="alert">
+          <span className="pii-icon" aria-hidden>🛡️</span>
+          <div className="pii-text">
+            <b>Careful 👀 that looks like a {piiWarning}.</b>
+            <span>Strangers can misuse personal info. Only share if you really trust them.</span>
+          </div>
+          <div className="pii-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => { setPiiWarning(null); inputRef.current?.focus(); }}>
+              ✏️ Edit
+            </button>
+            <button type="button" className="btn btn-ghost warn" onClick={doSend}>Send anyway</button>
+          </div>
+        </div>
+      )}
 
       <form className="chat-input" onSubmit={submit}>
         <button type="button" className={`btn btn-next ${nextBtn.cls}`} onClick={onNext} title="Shortcut: Esc">

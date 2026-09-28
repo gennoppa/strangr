@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import VideoTile from './VideoTile.jsx';
 import ChatPanel from './ChatPanel.jsx';
-import ReportDialog from './ReportDialog.jsx';
 import { Confetti, Connecting, Ended, Searching } from './Stage.jsx';
 import { interestEmoji, moodInfo } from '../copy.js';
 
@@ -29,13 +28,64 @@ const STATUS = {
   ended: { label: 'Chat ended', emoji: '💤' },
 };
 
+/** What to show while video is off: explains mutual consent and offers the button. */
+function gateCopy({ myVideoOk, partnerVideoOk, partnerHasCam, hasCamera }) {
+  if (myVideoOk && !partnerVideoOk) {
+    return {
+      emoji: '⏳', title: 'Waiting for the stranger…',
+      sub: 'Video starts only when they agree too.', action: 'cancel',
+    };
+  }
+  if (!partnerHasCam) {
+    if (myVideoOk && partnerVideoOk) {
+      return { emoji: '📷', title: 'Stranger has no camera', sub: 'They can see you 👀 — you can’t see them. Tap “Stop video” anytime.' };
+    }
+    return {
+      emoji: '📷', title: 'Stranger has no camera',
+      sub: hasCamera ? 'If you turn on video, they’ll see you — you won’t see them.' : 'You’re both on text. Enjoy the chat 💬',
+      action: hasCamera ? 'on' : null,
+    };
+  }
+  if (partnerVideoOk) {
+    return {
+      emoji: '🎥', title: 'Stranger is ready for video',
+      sub: 'Only if you’re comfortable 💜 Their video stays blurred until you reveal.', action: 'on', pulse: true,
+    };
+  }
+  return {
+    emoji: '🛡️', title: 'Text first',
+    sub: 'Video turns on only when you BOTH tap the button.', action: 'on',
+  };
+}
+
+function VideoGate({ chat, compact = false }) {
+  const g = gateCopy(chat);
+  return (
+    <div className={`video-gate ${compact ? 'compact' : ''}`}>
+      <div className="gate-emoji" aria-hidden>{g.emoji}</div>
+      <div className="gate-text">
+        <b>{g.title}</b>
+        <span>{g.sub}</span>
+      </div>
+      {g.action === 'on' && (
+        <button className={`btn btn-primary ${g.pulse ? 'pulse' : ''}`} onClick={() => chat.setVideoConsent(true)}>
+          🎥 Turn on video
+        </button>
+      )}
+      {g.action === 'cancel' && (
+        <button className="btn btn-ghost" onClick={() => chat.setVideoConsent(false)}>Cancel</button>
+      )}
+    </div>
+  );
+}
+
 export default function ChatRoom({ chat, video }) {
-  const [reporting, setReporting] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const prevStatus = useRef(null);
   const {
     status, messages, strangerTyping, commonInterests, myMood, partnerMood, localStream, remoteStream,
     micOn, camOn, connectionIssue, next, sendChat, setTyping, report, block, toggleMic, toggleCam,
+    videoActive, partnerHasCam, revealed, reveal, hide, setVideoConsent, hasCamera,
   } = chat;
 
   // Fire confetti each time a new match starts.
@@ -44,25 +94,39 @@ export default function ChatRoom({ chat, video }) {
     prevStatus.current = status;
   }, [status]);
 
-  // Esc = next stranger; closes the report dialog first if open.
+  // Esc = next stranger.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      if (reporting) setReporting(false);
-      else if (['chatting', 'waiting', 'ended'].includes(status)) next();
+      if (e.key === 'Escape' && ['chatting', 'waiting', 'ended'].includes(status)) next();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, reporting, status]);
+  }, [next, status]);
 
+  const chatting = status === 'chatting';
   const lastSystem = [...messages].reverse().find((m) => m.from === 'system' && m.kind === 'left')?.text;
-  const showVideo = video || remoteStream;
+  // Text-only users get the video area only once video is actually on.
+  const showVideo = video || (chatting && videoActive && !!remoteStream && partnerHasCam);
   const s = STATUS[status] || { label: status, emoji: '•' };
 
   const stage =
     status === 'waiting' || status === 'connecting' ? <Searching compact={!showVideo} mood={myMood} />
     : status === 'ended' ? <Ended message={lastSystem} onNew={next} compact={!showVideo} />
     : null;
+
+  // What covers the stranger's video right now.
+  let remoteOverlay = null;
+  if (stage) remoteOverlay = stage;
+  else if (chatting && !videoActive) remoteOverlay = <VideoGate chat={chat} />;
+  else if (chatting && !partnerHasCam) remoteOverlay = <VideoGate chat={chat} />;
+  else if (chatting && !remoteStream) remoteOverlay = <Connecting label="Connecting video… 📡" />;
+
+  const showRemoteVideo = chatting && videoActive && partnerHasCam && !!remoteStream;
+  const blurred = showRemoteVideo && !revealed;
+
+  // Text-only layout: a compact consent bar above the message box (unless neither side has a camera).
+  const videoBar =
+    !showVideo && chatting && (hasCamera || partnerHasCam) && !videoActive ? <VideoGate chat={chat} compact /> : null;
 
   return (
     <div className={`room ${showVideo ? 'with-video' : 'text-only'}`}>
@@ -74,12 +138,12 @@ export default function ChatRoom({ chat, video }) {
         <div className={`status-pill ${status}`}>
           <span className="pill-dot" />
           <span className="status-label">{s.label}</span>
-          {status === 'chatting' && partnerMood && partnerMood !== 'any' && (
+          {chatting && partnerMood && partnerMood !== 'any' && (
             <span className={`mood-pill mood-${partnerMood}`} title={`Stranger ${moodInfo(partnerMood).partner}`}>
               {moodInfo(partnerMood).emoji} <span className="mood-pill-text">{moodInfo(partnerMood).label}</span>
             </span>
           )}
-          {status === 'chatting' && commonInterests.length > 0 && (
+          {chatting && commonInterests.length > 0 && (
             <span className="common">
               {commonInterests.slice(0, 3).map((i) => (
                 <span key={i} className="tag small">{interestEmoji(i)} {i}</span>
@@ -89,11 +153,21 @@ export default function ChatRoom({ chat, video }) {
         </div>
 
         <div className="room-actions">
-          <button className="btn btn-ghost" disabled={status !== 'chatting'} onClick={block} title="Never match with this stranger again">
+          {chatting && videoActive && (
+            <button className="btn btn-ghost" onClick={() => setVideoConsent(false)} title="Stop video for both of you">
+              📴 <span className="btn-text">Stop video</span>
+            </button>
+          )}
+          <button className="btn btn-ghost" disabled={!chatting} onClick={block} title="Never match with this stranger again">
             🚫 <span className="btn-text">Block</span>
           </button>
-          <button className="btn btn-ghost danger" disabled={status !== 'chatting'} onClick={() => setReporting(true)} title="Report">
-            🚩 <span className="btn-text">Report</span>
+          <button
+            className="btn btn-report"
+            disabled={!chatting}
+            onClick={() => report('Quick report')}
+            title="Instantly leave, report and block this stranger"
+          >
+            🚨 <span className="btn-text">Leave & Report</span>
           </button>
           <button
             className="btn btn-ghost"
@@ -108,19 +182,35 @@ export default function ChatRoom({ chat, video }) {
 
       {showVideo && (
         <section className="videos">
-          <VideoTile stream={remoteStream} className={`remote ${status === 'chatting' && remoteStream ? 'live' : ''}`}>
-            {stage && <div className="overlay">{stage}</div>}
-            {status === 'chatting' && !remoteStream && (
-              <div className="overlay"><Connecting label="Connecting video… 📡" /></div>
+          <VideoTile
+            stream={showRemoteVideo ? remoteStream : null}
+            muted={!showRemoteVideo}
+            className={`remote ${showRemoteVideo ? 'live' : ''} ${blurred ? 'blurred' : ''}`}
+          >
+            {remoteOverlay && <div className="overlay">{remoteOverlay}</div>}
+            {blurred && (
+              <div className="overlay reveal-overlay">
+                <div className="reveal-card pop-in">
+                  <span className="gate-emoji" aria-hidden>🎭</span>
+                  <b>Blurred for your safety</b>
+                  <span>Reveal only when you’re comfortable.</span>
+                  <button className="btn btn-primary" onClick={reveal}>👀 Reveal</button>
+                </div>
+              </div>
             )}
-            {status === 'chatting' && remoteStream && <span className="stranger-badge">👤 Stranger</span>}
+            {showRemoteVideo && !blurred && (
+              <button className="blur-btn" onClick={hide} title="Blur the stranger’s video again">🙈 Blur</button>
+            )}
+            {showRemoteVideo && <span className="stranger-badge">👤 Stranger</span>}
             {connectionIssue && <div className="banner">{connectionIssue}</div>}
-            {matchCount > 0 && status === 'chatting' && <Confetti key={matchCount} />}
+            {matchCount > 0 && chatting && <Confetti key={matchCount} />}
           </VideoTile>
 
           {localStream && (
             <VideoTile stream={localStream} muted mirrored className="local">
-              <span className="you-badge">You</span>
+              <span className={`you-badge ${chatting && videoActive ? 'sharing' : ''}`}>
+                {chatting && videoActive ? '🔴 Sharing' : <>🙈 Only you<span className="hide-mobile"> see this</span></>}
+              </span>
               <div className="media-controls">
                 <button className={`round ${micOn ? '' : 'off'}`} onClick={toggleMic} aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}>
                   {Icon.mic(micOn)}
@@ -143,19 +233,10 @@ export default function ChatRoom({ chat, video }) {
         onNext={next}
         myMood={myMood}
         partnerMood={partnerMood || 'any'}
+        videoBar={videoBar}
         stage={showVideo ? null : stage}
-        confetti={!showVideo && matchCount > 0 && status === 'chatting' ? <Confetti key={matchCount} /> : null}
+        confetti={!showVideo && matchCount > 0 && chatting ? <Confetti key={matchCount} /> : null}
       />
-
-      {reporting && (
-        <ReportDialog
-          onCancel={() => setReporting(false)}
-          onSubmit={(reason) => {
-            report(reason);
-            setReporting(false);
-          }}
-        />
-      )}
     </div>
   );
 }

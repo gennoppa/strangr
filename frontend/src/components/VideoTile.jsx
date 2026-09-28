@@ -9,6 +9,11 @@ export default function VideoTile({ stream, muted = false, mirrored = false, cla
     }
   }, [stream]);
 
+  // React only applies the `muted` attribute on first render, so keep the property in sync manually.
+  useEffect(() => {
+    if (ref.current) ref.current.muted = muted;
+  }, [muted, stream]);
+
   return (
     <div className={`video-tile ${className}`}>
       <video
