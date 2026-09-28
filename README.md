@@ -83,19 +83,19 @@ Free-plan notes: the service sleeps after 15 min without traffic and takes ~1 mi
 750 free hours/month is enough for one service running all month. Everything is in memory, so a restart or
 sleep clears the queue and bans.
 
-### Free TURN (makes video work across different networks / mobile data)
+### Free TURN relay (makes video work across different networks / mobile data)
 
 Without a relay, video fails between many networks ("Video couldn't connect on this network").
 
-1. Sign up free at [metered.ca](https://www.metered.ca/tools/openrelay/) (20 GB/month of relay traffic).
-2. Your app name is the `xxx` in `xxx.metered.live`. In the dashboard open **TURN Server → Credentials / API key**
-   and copy the API key.
-3. In Render → your service → **Environment**, add:
-   - `METERED_APP` = `xxx`
-   - `METERED_API_KEY` = your API key
-4. Save (Render redeploys). The logs should show `Metered TURN enabled for app 'xxx'`.
+**Cloudflare Realtime TURN (1,000 GB/month free, then $0.05/GB)**
 
-The key stays on the server; `/api/config` hands browsers the relay credentials (cached 30 min).
+1. Cloudflare dashboard → **Realtime → TURN Server → Create**.
+2. Copy the **Key ID** and **API token**.
+3. Render → service → **Environment**: add `CF_TURN_KEY_ID` and `CF_TURN_API_TOKEN`.
+4. Logs should show `Cloudflare TURN enabled` and, on the first visit, `Fetched N ICE server entries from Cloudflare`.
+
+The backend mints short-lived (24 h) credentials, caches them for an hour, drops port-53 URLs (blocked by
+browsers) and serves them via `/api/config`. The token never reaches the browser.
 
 ### Custom domain
 

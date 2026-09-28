@@ -17,11 +17,11 @@ import com.strangerchat.config.AppProperties;
 public class ConfigController {
 
     private final AppProperties props;
-    private final MeteredTurnClient metered;
+    private final CloudflareTurnClient cloudflare;
 
-    public ConfigController(AppProperties props, MeteredTurnClient metered) {
+    public ConfigController(AppProperties props, CloudflareTurnClient cloudflare) {
         this.props = props;
-        this.metered = metered;
+        this.cloudflare = cloudflare;
     }
 
     @GetMapping("/config")
@@ -34,8 +34,8 @@ public class ConfigController {
             if (s.credential() != null) m.put("credential", s.credential());
             ice.add(m);
         }
-        // TURN relay (if configured) so video works across strict networks / mobile data.
-        ice.addAll(metered.iceServers());
+        // Cloudflare TURN relay (1,000 GB/month free) so video works across strict networks / mobile data.
+        ice.addAll(cloudflare.iceServers());
         return Map.of("iceServers", ice);
     }
 }

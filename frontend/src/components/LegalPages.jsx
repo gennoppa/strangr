@@ -154,14 +154,13 @@ export function PrivacyPage() {
         To keep video fast and private from our servers, your device connects directly to the other person’s device
         (WebRTC). A technical side effect is that the other person’s device can see your IP address, which can reveal
         your approximate location (city/region, not your exact address). When a direct connection isn’t possible, video
-        is relayed through our TURN provider (see below) in encrypted form.
+        is relayed through Cloudflare’s TURN service (see below) in encrypted form.
       </p>
 
       <h2>3. Service providers we rely on</h2>
       <ul>
         <li><b>Render</b> — hosts the website and chat server (may keep standard request logs, including IP addresses).</li>
-        <li><b>Cloudflare</b> — domain and DNS.</li>
-        <li><b>Metered</b> — TURN relay that forwards encrypted video when devices can’t connect directly.</li>
+        <li><b>Cloudflare</b> — domain, DNS, and the TURN relay that forwards encrypted video when devices can’t connect directly.</li>
         <li><b>Google STUN servers</b> — help your device discover how to connect (sees your IP address).</li>
       </ul>
       <p>These providers may process data outside India under their own privacy policies.</p>
